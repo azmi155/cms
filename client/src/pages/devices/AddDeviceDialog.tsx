@@ -20,9 +20,11 @@ function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
     password: '',
     api_endpoint: ''
   });
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
     try {
       const response = await fetch('/api/devices', {
@@ -32,6 +34,8 @@ function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
         },
         body: JSON.stringify(formData),
       });
+
+      const result = await response.json();
 
       if (response.ok) {
         onOpenChange(false);
@@ -44,15 +48,48 @@ function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
           password: '',
           api_endpoint: ''
         });
+        
+        // Show result of connection test
+        if (result.connected) {
+          alert(`Device "${formData.name}" added successfully and is connected!`);
+        } else {
+          alert(`Device "${formData.name}" added but connection failed. You can test the connection again from the devices list.`);
+        }
+        
         window.location.reload();
+      } else {
+        alert('Failed to create device: ' + result.error);
       }
     } catch (error) {
       console.error('Error creating device:', error);
+      alert('Failed to create device');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const getDefaultPort = (deviceType: string) => {
+    switch (deviceType) {
+      case 'mikrotik':
+        return '8728'; // RouterOS API port
+      case 'ruijie':
+        return '22'; // SSH port
+      case 'olt':
+        return '161'; // SNMP port
+      default:
+        return '22';
+    }
+  };
+
+  const handleTypeChange = (value: string) => {
+    handleInputChange('type', value);
+    // Auto-update port based on device type
+    const defaultPort = getDefaultPort(value);
+    handleInputChange('port', defaultPort);
   };
 
   return (
@@ -61,7 +98,7 @@ function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
         <DialogHeader>
           <DialogTitle>Add Network Device</DialogTitle>
           <DialogDescription>
-            Add a new device to your network infrastructure
+            Add a new device to your network infrastructure. The system will automatically test the connection.
           </DialogDescription>
         </DialogHeader>
         
@@ -79,7 +116,7 @@ function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
 
           <div className="space-y-2">
             <Label htmlFor="type">Device Type</Label>
-            <Select value={formData.type} onValueChange={(value) => handleInputChange('type', value)}>
+            <Select value={formData.type} onValueChange={handleTypeChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select device type" />
               </SelectTrigger>
@@ -111,6 +148,11 @@ function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
               value={formData.port}
               onChange={(e) => handleInputChange('port', e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              {formData.type === 'mikrotik' && 'Default: 8728 (RouterOS API)'}
+              {formData.type === 'ruijie' && 'Default: 22 (SSH)'}
+              {formData.type === 'olt' && 'Default: 161 (SNMP)'}
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -144,10 +186,17 @@ function AddDeviceDialog({ open, onOpenChange }: AddDeviceDialogProps) {
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button type="submit">Add Device</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Adding Device...' : 'Add Device'}
+            </Button>
           </div>
         </form>
       </DialogContent>

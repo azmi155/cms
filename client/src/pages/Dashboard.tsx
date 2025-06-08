@@ -3,6 +3,54 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Router, Users, Activity, Network } from 'lucide-react';
 
 function Dashboard() {
+  const [dashboardData, setDashboardData] = React.useState({
+    devices: { total: 0, active: 0, inactive: 0, error: 0 },
+    users: { total: 0, active: 0, hotspot: 0, pppoe: 0 },
+    bandwidth: { total_in: 0, total_out: 0 }
+  });
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const response = await fetch('/api/dashboard');
+      const data = await response.json();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 GB';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getNetworkStatus = () => {
+    if (dashboardData.devices.error > 0) {
+      return { status: 'Issues Detected', color: 'text-destructive' };
+    } else if (dashboardData.devices.active > 0) {
+      return { status: 'Healthy', color: 'text-green-600' };
+    } else {
+      return { status: 'No Devices', color: 'text-muted-foreground' };
+    }
+  };
+
+  const networkStatus = getNetworkStatus();
+  const totalBandwidth = dashboardData.bandwidth.total_in + dashboardData.bandwidth.total_out;
+
+  if (loading) {
+    return <div>Loading dashboard...</div>;
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -19,9 +67,10 @@ function Dashboard() {
             <Router className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{dashboardData.devices.total}</div>
             <p className="text-xs text-muted-foreground">
-              Ruijie, Mikrotik, OLT devices
+              {dashboardData.devices.active} active, {dashboardData.devices.inactive} inactive
+              {dashboardData.devices.error > 0 && `, ${dashboardData.devices.error} errors`}
             </p>
           </CardContent>
         </Card>
@@ -32,9 +81,9 @@ function Dashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{dashboardData.users.active}</div>
             <p className="text-xs text-muted-foreground">
-              Hotspot and PPPoE users
+              {dashboardData.users.hotspot} Hotspot, {dashboardData.users.pppoe} PPPoE
             </p>
           </CardContent>
         </Card>
@@ -45,9 +94,11 @@ function Dashboard() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Healthy</div>
+            <div className={`text-2xl font-bold ${networkStatus.color}`}>
+              {networkStatus.status}
+            </div>
             <p className="text-xs text-muted-foreground">
-              All systems operational
+              {dashboardData.devices.active} of {dashboardData.devices.total} devices online
             </p>
           </CardContent>
         </Card>
@@ -58,9 +109,9 @@ function Dashboard() {
             <Network className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0 GB</div>
+            <div className="text-2xl font-bold">{formatBytes(totalBandwidth)}</div>
             <p className="text-xs text-muted-foreground">
-              Today's total usage
+              Total data transferred
             </p>
           </CardContent>
         </Card>
@@ -69,29 +120,69 @@ function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Device Activity</CardTitle>
+            <CardTitle>Device Summary</CardTitle>
             <CardDescription>
-              Latest device status updates
+              Overview of your network devices
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-sm text-muted-foreground">
-              No recent activity
-            </div>
+            {dashboardData.devices.total === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No devices configured yet
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Active Devices:</span>
+                  <span className="font-medium text-green-600">{dashboardData.devices.active}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Inactive Devices:</span>
+                  <span className="font-medium text-muted-foreground">{dashboardData.devices.inactive}</span>
+                </div>
+                {dashboardData.devices.error > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>Error Devices:</span>
+                    <span className="font-medium text-destructive">{dashboardData.devices.error}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>User Sessions</CardTitle>
+            <CardTitle>User Summary</CardTitle>
             <CardDescription>
-              Active user connections
+              Active user connections and services
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-sm text-muted-foreground">
-              No active sessions
-            </div>
+            {dashboardData.users.total === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No users configured yet
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Total Users:</span>
+                  <span className="font-medium">{dashboardData.users.total}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Active Users:</span>
+                  <span className="font-medium text-green-600">{dashboardData.users.active}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Hotspot Users:</span>
+                  <span className="font-medium">{dashboardData.users.hotspot}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>PPPoE Users:</span>
+                  <span className="font-medium">{dashboardData.users.pppoe}</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
